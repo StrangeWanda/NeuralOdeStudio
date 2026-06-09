@@ -1,0 +1,27 @@
+﻿# Build and Output Directories
+out/
+build/
+bin/
+obj/
+
+# CMake Artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+_deps/
+
+# Visual Studio Specific
+.vs/
+*.user
+*.suo
+*.db
+*.opendb
+*.VC.db
+
+# Compiled Binaries & OS files
+*.exe
+*.dll
+*.lib
+*.so
+*.dylib
+.DS_Store
