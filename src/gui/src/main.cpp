@@ -1,68 +1,53 @@
-#include "imgui.h"
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_opengl3.h"
-#include <GLFW/glfw3.h>
+//
+
 #include <iostream>
+#include <iomanip>
+#include "core/neural_network.h"
+#include "core/rk4_solver.h"
 
 int main() {
-    // 1. Initialize GLFW
-    if (!glfwInit()) return -1;
+    std::cout << "--- Booting Neural ODE Core ---\n\n";
 
-    // Set OpenGL version (3.0 core)
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+    // 1. Instantiate the Model (State: 2, Hidden: 4, Control: 2)
+    ncore::nn::ContinuousMLP<4, 4, 2> model;
 
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "Neural ODE Studio", nullptr, nullptr);
-    if (!window) {
-        glfwTerminate();
-        return -1;
+    // 2. Generate a dummy weight array (Total params for 2x4x2 = 34)
+    float dummy_weights[34];
+    for (int i = 0; i < 34; i++) {
+        dummy_weights[i] = 0.1f; // Initialize everything to a small positive weight
     }
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1); // Enable vsync
+    model.load_weights(dummy_weights);
+    std::cout << "[SUCCESS] Weights loaded safely without heap allocation.\n";
 
-    // 2. Initialize Dear ImGui
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;     // Enable Docking
+    // 3. Setup the Physics Parameters
+    float initial_state[2] = { 0.0f, 0.0f };      // i_L = 0, v_C = 0
+    float control_inputs[2] = { 0.5f, 24.0f };    // D = 0.5, V_in = 24V
 
-    ImGui::StyleColorsDark();
+    float dt = 1e-4f;  // 100 microsecond time step
+    float t_end = 1e-3f; // 1 millisecond total simulation time
+    int num_steps = static_cast<int>((t_end / dt) + 0.5f);
 
-    // 3. Setup Platform/Renderer backends
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 130");
+    // Create a stack buffer to hold the output trajectory (2 states * num_steps)
+    float trajectory_buffer[20];
 
-    // 4. Main Render Loop
-    while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
+    // 4. Instantiate the Solver and Run
+    ncore::solver::RK4Solver<2, 2> solver;
+    std::cout << "[RUNNING] Integrating trajectory over " << num_steps << " steps...\n\n";
 
-        // Start the ImGui frame
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
+    solver.integrateTrajectory(model, initial_state, control_inputs, t_end, dt, trajectory_buffer);
 
-        // --- UI CODE GOES HERE ---
-        ImGui::ShowDemoWindow(); // Shows the massive ImGui test panel
+    // 5. Print the Results
+    std::cout << std::left << std::setw(10) << "Time(ms)"
+        << std::setw(15) << "State 0 (i_L)"
+        << std::setw(15) << "State 1 (v_C)" << "\n";
+    std::cout << "------------------------------------------\n";
 
-        // Rendering
-        ImGui::Render();
-        int display_w, display_h;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
-        glViewport(0, 0, display_w, display_h);
-        glClearColor(0.1f, 0.1f, 0.11f, 1.0f); // Dark grey background
-        glClear(GL_COLOR_BUFFER_BIT);
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-        glfwSwapBuffers(window);
+    for (int i = 0; i < num_steps; i++) {
+        std::cout << std::left << std::setw(10) << (i * dt * 1000.0f) // Convert to ms
+            << std::setw(15) << trajectory_buffer[i * 2]
+            << std::setw(15) << trajectory_buffer[i * 2 + 1] << "\n";
     }
 
-    // 5. Cleanup
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
-    glfwDestroyWindow(window);
-    glfwTerminate();
-
+    std::cout << "\n--- Test Complete ---\n";
     return 0;
 }
